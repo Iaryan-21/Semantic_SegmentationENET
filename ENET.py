@@ -1,12 +1,111 @@
 import torch
 import torch.nn as nn
 import torchvision
+from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
+import glob
+import os
+from PIL import Image
+import torch.optim as optim
+import matplotlib.pyplot as plt
+import torch.nn.functional as F
+
+class CityscapesDataset(Dataset):
+    def __init__(self, root_dir, split='train', transform=None, label_transform=None):
+        self.root_dir = root_dir
+        self.split = split
+        self.transform = transform
+        self.label_transform = label_transform
+       
+        print(f"Root directory: {root_dir}")
+        image_pattern = os.path.join(root_dir, 'leftImg8bit_trainvaltest\leftImg8bit', split, '*', '*.png')
+        label_pattern = os.path.join(root_dir, 'gtFine_trainvaltest\gtFine', split, '*', '*_labelIds.png')
+        
+        print(f"Image pattern: {image_pattern}")
+        print(f"Label pattern: {label_pattern}")
+
+        self.images = sorted(glob.glob(image_pattern))
+        self.labels = sorted(glob.glob(label_pattern))
+
+        print(f"Number of images: {len(self.images)}")
+        print(f"Number of labels: {len(self.labels)}")
+
+        if len(self.images) != len(self.labels):
+            print("Mismatch in the number of images and labels.")
+            print("Sample image paths:")
+            for i in range(min(5, len(self.images))):
+                print(self.images[i])
+
+            print("Sample label paths:")
+            for i in range(min(5, len(self.labels))):
+                print(self.labels[i])
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        image = Image.open(self.images[idx]).convert("RGB")
+        label = Image.open(self.labels[idx])
+        if self.transform:
+            image = self.transform(image)
+        if self.label_transform:
+            label = self.label_transform(label)
+        return image, label
+
+
+image_transform = transforms.Compose([
+    transforms.Resize((512, 512)),
+    transforms.ToTensor()
+])
+
+label_transform = transforms.Compose([
+    transforms.Resize((512, 512), interpolation=Image.NEAREST),  
+    transforms.ToTensor()
+])
+root_dir = 'C:\\Users\\aryan\\OneDrive\\Documents\\drug_protein_interaction'
+
+train_dataset = CityscapesDataset(
+    root_dir=root_dir,
+    split='train',
+    transform=image_transform,
+    label_transform=label_transform
+)
+
+val_dataset = CityscapesDataset(
+    root_dir=root_dir,
+    split='val',
+    transform=image_transform,
+    label_transform=label_transform
+)
+
+def show_images(dataset, num_images=5):
+    fig, axes = plt.subplots(num_images, 2, figsize=(10, num_images * 5))
+    for i in range(num_images):
+        if i >= len(dataset):
+            break
+        image, label = dataset[i]
+        image = image.permute(1, 2, 0).numpy()  
+        label = label.squeeze().numpy()  
+        
+        axes[i, 0].imshow(image)
+        axes[i, 0].set_title('Image')
+        axes[i, 0].axis('off')
+        
+        axes[i, 1].imshow(label, cmap='gray')
+        axes[i, 1].set_title('Label')
+        axes[i, 1].axis('off')
+    
+    plt.show()
+
+print("Training Dataset:")
+show_images(train_dataset, num_images=2)
+print("Validation Dataset:")
+show_images(val_dataset, num_images=2)
 
 class enet(nn.Module):
   def __init__(self, num_classes):
     super(enet, self).__init__()
-    self.initial = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, padding=1)   
+    self.initial = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, padding=1)
     self.bottleneck1_0 = nn.Sequential(
         nn.Conv2d(16, 64, kernel_size=2, stride=2, padding=0, bias=False),
         nn.BatchNorm2d(64),
@@ -27,7 +126,7 @@ class enet(nn.Module):
     self.bottleneck1_3 = self.bottleneck1_1
     self.bottleneck1_4 = self.bottleneck1_1
 
-  
+
     self.bottleneck2_0 = nn.Sequential(
         nn.Conv2d(64, 128, kernel_size=2, stride=2, padding=0, bias=False),
         nn.BatchNorm2d(128),
@@ -164,4 +263,4 @@ class enet(nn.Module):
     #full conv
     x = self.fullconv(x)
 
-    return x 
+    return x
