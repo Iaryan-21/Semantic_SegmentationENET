@@ -9,6 +9,7 @@ from PIL import Image
 import torch.optim as optim
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
+from model import enet
 
 class CityscapesDataset(Dataset):
     def __init__(self, root_dir, split='train', transform=None, label_transform=None):
@@ -16,10 +17,10 @@ class CityscapesDataset(Dataset):
         self.split = split
         self.transform = transform
         self.label_transform = label_transform
-       
+        
         print(f"Root directory: {root_dir}")
-        image_pattern = os.path.join(root_dir, 'leftImg8bit_trainvaltest\leftImg8bit', split, '*', '*.png')
-        label_pattern = os.path.join(root_dir, 'gtFine_trainvaltest\gtFine', split, '*', '*_labelIds.png')
+        image_pattern = os.path.join(root_dir, 'leftImg8bit_trainvaltest/leftImg8bit', split, '*', '*.png')
+        label_pattern = os.path.join(root_dir, 'gtFine_trainvaltest/gtFine', split, '*', '*_labelIds.png')
         
         print(f"Image pattern: {image_pattern}")
         print(f"Label pattern: {label_pattern}")
@@ -52,16 +53,16 @@ class CityscapesDataset(Dataset):
             label = self.label_transform(label)
         return image, label
 
-
 image_transform = transforms.Compose([
     transforms.Resize((512, 512)),
     transforms.ToTensor()
 ])
 
 label_transform = transforms.Compose([
-    transforms.Resize((512, 512), interpolation=Image.NEAREST),  
+    transforms.Resize((512, 512), interpolation=Image.NEAREST),
     transforms.ToTensor()
 ])
+
 root_dir = 'C:\\Users\\aryan\\OneDrive\\Documents\\drug_protein_interaction'
 
 train_dataset = CityscapesDataset(
@@ -78,14 +79,17 @@ val_dataset = CityscapesDataset(
     label_transform=label_transform
 )
 
+train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=4)
+val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=4)
+
 def show_images(dataset, num_images=5):
     fig, axes = plt.subplots(num_images, 2, figsize=(10, num_images * 5))
     for i in range(num_images):
         if i >= len(dataset):
             break
         image, label = dataset[i]
-        image = image.permute(1, 2, 0).numpy()  
-        label = label.squeeze().numpy()  
+        image = image.permute(1, 2, 0).numpy()
+        label = label.squeeze().numpy()
         
         axes[i, 0].imshow(image)
         axes[i, 0].set_title('Image')
@@ -96,171 +100,52 @@ def show_images(dataset, num_images=5):
         axes[i, 1].axis('off')
     
     plt.show()
+def main():
+    # print("Training Dataset:")
+    # show_images(train_dataset, num_images=2)
+    # print("Validation Dataset:")
+    # show_images(val_dataset, num_images=2)
 
-print("Training Dataset:")
-show_images(train_dataset, num_images=2)
-print("Validation Dataset:")
-show_images(val_dataset, num_images=2)
+    device = 'cpu'
+    model = enet(num_classes=21).to(device)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-class enet(nn.Module):
-  def __init__(self, num_classes):
-    super(enet, self).__init__()
-    self.initial = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, padding=1)
-    self.bottleneck1_0 = nn.Sequential(
-        nn.Conv2d(16, 64, kernel_size=2, stride=2, padding=0, bias=False),
-        nn.BatchNorm2d(64),
-        nn.PReLU(64)
-    )
-    self.bottleneck1_1 = nn.Sequential(
-        nn.Conv2d(64, 64, kernel_size=1, bias=False),
-        nn.BatchNorm2d(64),
-        nn.PReLU(64),
-        nn.Conv2d(64, 64, kernel_size=3, padding=1, bias=False),
-        nn.BatchNorm2d(64),
-        nn.PReLU(64),
-        nn.Conv2d(64, 64, kernel_size=1, bias=False),
-        nn.BatchNorm2d(64),
-        nn.PReLU(64)
-    )
-    self.bottleneck1_2 = self.bottleneck1_1
-    self.bottleneck1_3 = self.bottleneck1_1
-    self.bottleneck1_4 = self.bottleneck1_1
+    num_epochs = 50
 
+    for epoch in range(num_epochs):
+        model.train()
+        running_loss = 0.0
+        for images, labels in train_loader:
+            images = images.to(device)
+            labels = labels.to(device)
+            labels = labels.squeeze(1).long()  
 
-    self.bottleneck2_0 = nn.Sequential(
-        nn.Conv2d(64, 128, kernel_size=2, stride=2, padding=0, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128)
-    )
-    self.bottleneck2_1 = nn.Sequential(
-        nn.Conv2d(128, 128, kernel_size=1, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128),
-        nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128),
-        nn.Conv2d(128, 128, kernel_size=1, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128)
-    )
-    self.bottleneck2_2 = nn.Sequential(
-        nn.Conv2d(128, 128, kernel_size=1, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128),
-        nn.Conv2d(128, 128, kernel_size=3, padding=2, dilation=2, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128),
-        nn.Conv2d(128, 128, kernel_size=1, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128)
-    )
-    self.bottleneck2_3 = nn.Sequential(
-        nn.Conv2d(128, 128, kernel_size=1, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128),
-        nn.Conv2d(128, 128, kernel_size=(1, 5), padding=(0, 2), bias=False),
-        nn.Conv2d(128, 128, kernel_size=(5, 1), padding=(2, 0), bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128),
-        nn.Conv2d(128, 128, kernel_size=1, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128)
-    )
-    self.bottleneck2_4 = nn.Sequential(
-        nn.Conv2d(128, 128, kernel_size=1, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128),
-        nn.Conv2d(128, 128, kernel_size=3, padding=4, dilation=4, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128),
-        nn.Conv2d(128, 128, kernel_size=1, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128)
-    )
-    self.bottleneck2_5 = self.bottleneck2_1
-    self.bottleneck2_6 = nn.Sequential(
-        nn.Conv2d(128, 128, kernel_size=1, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128),
-        nn.Conv2d(128, 128, kernel_size=3, padding=8, dilation=8, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128),
-        nn.Conv2d(128, 128, kernel_size=1, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128)
-    )
-    self.bottleneck2_7 = self.bottleneck2_3
-    self.bottleneck2_8 = nn.Sequential(
-        nn.Conv2d(128, 128, kernel_size=1, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128),
-        nn.Conv2d(128, 128, kernel_size=3, padding=16, dilation=16, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128),
-        nn.Conv2d(128, 128, kernel_size=1, bias=False),
-        nn.BatchNorm2d(128),
-        nn.PReLU(128)
-    )
-    self.bottleneck3_1 = self.bottleneck2_1
-    self.bottleneck3_2 = self.bottleneck2_2
-    self.bottleneck3_3 = self.bottleneck2_3
-    self.bottleneck3_4 = self.bottleneck2_4
-    self.bottleneck3_5 = self.bottleneck2_1
-    self.bottleneck3_6 = self.bottleneck2_6
-    self.bottleneck3_7 = self.bottleneck2_3
-    self.bottleneck3_8 = self.bottleneck2_8
+            optimizer.zero_grad()
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
 
+            running_loss += loss.item() * images.size(0)
 
-    self.bottleneck4_0 = nn.Sequential(
-        nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2, padding=0, bias=False),
-        nn.BatchNorm2d(64),
-        nn.PReLU(64)
-    )
-    self.bottleneck4_1 = self.bottleneck1_1
-    self.bottleneck4_2 = self.bottleneck1_1
-    self.bottleneck5_0 = nn.Sequential(
-        nn.ConvTranspose2d(64, 16, kernel_size=2, stride=2, padding=0, bias=False),
-        nn.BatchNorm2d(16),
-        nn.PReLU(16)
-    )
-    self.bottleneck5_1 = self.bottleneck1_1
-    self.fullconv = nn.Conv2d(in_channels=16, out_channels=num_classes, kernel_size=1)
+        epoch_loss = running_loss / len(train_loader.dataset)
+        print(f'Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}')
 
-  def forward(self, x):
-    #bottleneck 1
-    x = self.initial(x)
-    x = self.bottleneck1_0(x)
-    x = self.bottleneck1_1(x)
-    x = self.bottleneck1_2(x)
-    x = self.bottleneck1_3(x)
-    x = self.bottleneck1_4(x)
-    #bottleneck 2
-    x = self.bottleneck2_0(x)
-    x = self.bottleneck2_1(x)
-    x = self.bottleneck2_2(x)
-    x = self.bottleneck2_3(x)
-    x = self.bottleneck2_4(x)
-    x = self.bottleneck2_5(x)
-    x = self.bottleneck2_6(x)
-    x = self.bottleneck2_7(x)
-    x = self.bottleneck2_8(x)
-    #bottleneck 3
-    x = self.bottleneck3_1(x)
-    x = self.bottleneck3_2(x)
-    x = self.bottleneck3_3(x)
-    x = self.bottleneck3_4(x)
-    x = self.bottleneck3_5(x)
-    x = self.bottleneck3_6(x)
-    x = self.bottleneck3_7(x)
-    x = self.bottleneck3_8(x)
-    #bottleneck 4
-    x = self.bottleneck4_0(x)
-    x = self.bottleneck4_1(x)
-    x = self.bottleneck4_2(x)
-    #bottleneck 5
-    x = self.bottleneck5_0(x)
-    x = self.bottleneck5_1(x)
-    #full conv
-    x = self.fullconv(x)
+        model.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for images, labels in val_loader:
+                images = images.to(device)
+                labels = labels.to(device)
+                labels = labels.squeeze(1).long()  
 
-    return x
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                val_loss += loss.item() * images.size(0)
+        
+        val_loss /= len(val_loader.dataset)
+        print(f'Validation Loss: {val_loss:.4f}')
+
+if __name__ == "__main__":
+    main()
