@@ -6,7 +6,7 @@ EfficientNet is a convolutional Neural Network architecture which aims to achiev
 
 ## EfficientNet (ENet) Architecture
 
-This README provides an overview of the EfficientNet (ENet) architecture, detailing the layers and output sizes for an example input of 512x512.
+Provides an overview of the EfficientNet (ENet) architecture, detailing the layers and output sizes for an example input of 512x512.
 
 ### Model Architecture
 
